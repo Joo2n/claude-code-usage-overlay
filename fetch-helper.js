@@ -42,22 +42,78 @@ const CLAUDE_PATH = findClaude();
 const TRUSTED_DIR = os.tmpdir();
 
 function cleanOutput(raw) {
+  let s = raw;
+  // Strip OSC sequences (title sets etc)
+  s = s.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '');
   // Replace cursor-right movements with space
-  let s = raw.replace(/\x1b\[\d*C/g, ' ');
-  // Replace cursor positioning with newline
+  s = s.replace(/\x1b\[\d*C/g, ' ');
+  // Replace cursor positioning (row;col) with newline
   s = s.replace(/\x1b\[\d+;\d+H/g, '\n');
-  // Strip all remaining ANSI escape codes
+  // Strip all remaining ANSI/VT escape sequences
   s = s.replace(/\x1b\[[^A-Za-z]*[A-Za-z]/g, '');
-  // Strip OSC sequences
-  s = s.replace(/\x1b\][^\x07]*\x07/g, '');
-  // Clean up block characters (progress bars)
-  s = s.replace(/[█▉▊▋▌▍▎▏░▒▓▐▛▜▝▘▗▖▞▟]/g, '');
+  s = s.replace(/\x1b[=>]/g, '');
+  s = s.replace(/\x1b[()][0-9A-Za-z]/g, '');
+  // Strip carriage returns (keep newlines)
+  s = s.replace(/\r/g, '\n');
+  // Clean up block/box-drawing characters (progress bars)
+  s = s.replace(/[█▉▊▋▌▍▎▏░▒▓▐▛▜▝▘▗▖▞▟■□▪▫●○◆◇]/g, '');
   // Replace tabs with spaces
   s = s.replace(/\t/g, ' ');
   // Collapse multiple spaces into single
   s = s.replace(/ {2,}/g, ' ');
   // Clean lines
   s = s.split('\n').map(l => l.trim()).filter(l => l.length > 0).join('\n');
+  return s;
+}
+
+function cleanResetTime(raw) {
+  if (!raw) return raw;
+  const s = raw.trim();
+
+  // Parse time: "10:50pm" or "1am" or "12:59am"
+  function parseTime(timeStr) {
+    const m12 = timeStr.match(/(\d{1,2})(?::(\d{2}))?(am|pm)/i);
+    if (!m12) return null;
+    let h = parseInt(m12[1], 10);
+    const min = m12[2] ? m12[2] : '00';
+    const ampm = m12[3].toLowerCase();
+    const period = ampm === 'am' ? '오전' : '오후';
+    // Convert: 12am → 0, 12pm → 12, etc.
+    if (ampm === 'am' && h === 12) h = 0;
+    if (ampm === 'pm' && h !== 12) h += 12;
+    // Back to 12h display
+    const displayH = h % 12 === 0 ? 12 : h % 12;
+    return `${period} ${displayH}:${min}`;
+  }
+
+  // Pattern A: just time + timezone → "오늘 오전/오후 H:MM"
+  // e.g. "10:50pm(Asia/Seoul)" or "10:50pm (Asia/Seoul)"
+  const justTime = s.match(/^(\d{1,2}(?::\d{2})?(?:am|pm))\s*\([A-Za-z\/]+\)$/i);
+  if (justTime) {
+    const t = parseTime(justTime[1]);
+    return t ? `오늘 ${t}` : s;
+  }
+
+  // Pattern B: month + day + time → "N월 D일 오전/오후 H:MM"
+  // e.g. "Jun30at1am(Asia/Seoul)" or "Jun 30 at 1am (Asia/Seoul)"
+  const MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+  const withDate = s.match(/([A-Za-z]{3})\s*(\d{1,2})\s*(?:at\s*)?(\d{1,2}(?::\d{2})?(?:am|pm))/i);
+  if (withDate) {
+    const mon = MONTHS[withDate[1].toLowerCase()];
+    const day = withDate[2];
+    const t = parseTime(withDate[3]);
+    if (mon && t) return `${mon}월 ${day}일 ${t}`;
+  }
+
+  // Pattern C: number day + time (month lost to PTY corruption)
+  // e.g. "30at1am(Asia/Seoul)" or "30 a 12:59am"
+  const dayTime = s.match(/^(\d{1,2})\s*(?:at\s*|[a-z]\s+)?(\d{1,2}(?::\d{2})?(?:am|pm))/i);
+  if (dayTime) {
+    const day = dayTime[1];
+    const t = parseTime(dayTime[2]);
+    if (t) return `${day}일 ${t}`;
+  }
+
   return s;
 }
 
@@ -70,30 +126,54 @@ function parseUsage(text) {
     timestamp: Date.now(),
   };
 
-  // Find all "NN% used" occurrences
-  const pctMatches = [...text.matchAll(/(\d+)\s*%\s*used/gi)];
+  const lines = text.split('\n');
 
-  // Find all reset patterns - match "Rese" followed by any chars then timezone in parens
-  const resetMatches = [...text.matchAll(/Rese\w*\s+([\w\d,: ]+\([\w\/]+\))/gi)];
-
-  // Find spend pattern
-  const spendMatch = text.match(/\$(\d+\.?\d*)\s*\/\s*\$(\d+\.?\d*)\s*spent/i);
-
-  // Assign by order: session, week-all, week-sonnet, extra
-  const sections = ['session', 'week', 'weekSonnet', 'extra'];
-
-  for (let idx = 0; idx < Math.min(pctMatches.length, 4); idx++) {
-    const key = sections[idx];
-    result[key] = { percent: parseInt(pctMatches[idx][1], 10) };
-    if (resetMatches[idx]) {
-      result[key].resetTime = resetMatches[idx][1]
-        .trim()
-        .replace(/^[a-z]{1,2}\s+/i, '')  // Strip garbled "Resets" artifacts (e.g. "s " from "Rese s")
-        .replace(/\s+/g, ' ');
+  // Extract percent + resetTime starting from a given line index
+  function extractFrom(startIdx) {
+    let percent = null;
+    let resetTime = null;
+    for (let i = startIdx; i < Math.min(startIdx + 7, lines.length); i++) {
+      const line = lines[i];
+      // Stop if we hit another major section header
+      if (i > startIdx && /current\s*(session|week)/i.test(line)) break;
+      if (percent === null) {
+        const m = line.match(/(\d+)\s*%\s*used/i);
+        if (m) { percent = parseInt(m[1], 10); continue; }
+      }
+        if (percent !== null && resetTime === null) {
+        const m = line.match(/Reset[s]?\s*(.+\([A-Za-z\/]+\))/i);
+        if (m) { resetTime = cleanResetTime(m[1]); break; }
+      }
     }
+    return percent !== null ? { percent, resetTime } : null;
   }
 
-  // Add spend info to extra if present
+  // Find first line matching any of the patterns, with optional exclusions
+  function findLineIdx(includePatterns, excludePatterns = []) {
+    return lines.findIndex(l =>
+      includePatterns.some(p => p.test(l)) &&
+      !excludePatterns.some(p => p.test(l))
+    );
+  }
+
+  // Session
+  const sessionIdx = findLineIdx([/current\s*session/i]);
+  if (sessionIdx !== -1) result.session = extractFrom(sessionIdx);
+
+  // Week (all models) — "Current week" without "sonnet"
+  const weekIdx = findLineIdx([/current\s*week/i], [/sonnet/i]);
+  if (weekIdx !== -1) result.week = extractFrom(weekIdx);
+
+  // Week (Sonnet only) — "Current week" with "sonnet", or standalone "Sonnet only"
+  const sonnetIdx = findLineIdx([/current\s*week.*sonnet/i, /sonnet\s+only/i]);
+  if (sonnetIdx !== -1) result.weekSonnet = extractFrom(sonnetIdx);
+
+  // Extra usage
+  const extraIdx = findLineIdx([/extra\s+usage/i]);
+  if (extraIdx !== -1) result.extra = extractFrom(extraIdx);
+
+  // Spend tracking for extra
+  const spendMatch = text.match(/\$(\d+\.?\d*)\s*\/\s*\$(\d+\.?\d*)\s*spent/i);
   if (result.extra && spendMatch) {
     result.extra.spent = parseFloat(spendMatch[1]);
     result.extra.limit = parseFloat(spendMatch[2]);
@@ -121,23 +201,23 @@ function fetchUsage() {
       output += data;
     });
 
-    setTimeout(() => { shell.write('/usage'); }, 5000);
-    setTimeout(() => { shell.write('\r'); }, 6000);
-    setTimeout(() => { shell.write('\r'); }, 7000);
+    // Wait for Claude v2+ to fully start the TUI, then send /usage with Enter in one shot
+    setTimeout(() => { shell.write('/usage\r'); }, 8000);
 
     setTimeout(() => {
       shell.write('/exit\r');
-    }, 15000);
+    }, 18000);
 
     setTimeout(() => {
       if (!exited) {
         exited = true;
         try { shell.kill(); } catch (e) {}
         const cleaned = cleanOutput(output);
+        try { require('fs').writeFileSync('/tmp/usage-debug.txt', cleaned); } catch (e) {}
         const data = parseUsage(cleaned);
         resolve(data);
       }
-    }, 18000);
+    }, 22000);
 
     shell.onExit(() => {
       if (!exited) {

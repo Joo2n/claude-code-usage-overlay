@@ -6,7 +6,7 @@ const { fetchUsage } = require('./usage-fetcher');
 
 const POS_FILE = path.join(__dirname, '.overlay-position.json');
 const ICON_FILE = path.join(__dirname, '.tray-icon.png');
-const POLL_INTERVAL = 10 * 1000; // 10 seconds (fetches take ~18s, guard prevents overlap)
+const POLL_INTERVAL = 30 * 1000; // 30 seconds (fetches take ~22s with new timing)
 
 let mainWindow = null;
 let tray = null;

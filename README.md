@@ -1,10 +1,40 @@
 # Claude Code Usage Overlay
 
-> **By [Pears Research Services](mailto:pearsresearchservices@outlook.com)**
+> **By [Pears Research Services](mailto:pearsresearchservices@outlook.com)** · 한글화 + macOS 대응 포크 by [Joo2n](https://github.com/Joo2n)
 
 **Always-on-top desktop widget that shows your Claude Code usage limits in real-time.**
 
 ![Claude Code Usage Overlay](screenshot.png)
+
+---
+
+## 🇰🇷 한글판 안내 (이 포크에 대하여)
+
+이 레포는 원작([MattPears1/claude-code-usage-overlay](https://github.com/MattPears1/claude-code-usage-overlay))을 **한글화하고 macOS에서 동작하도록 손본 개인 포크**입니다.
+
+### 변경 사항
+- **전체 UI 한글화** — `현재 세션`, `이번 주 (전체 모델)`, `Sonnet 전용`, `추가 사용량`, `라이트/다크`, `업데이트` 등
+- **리셋 시각 한글 표기** — `오늘 오전 1:40`, `6월 30일 오후 3:00` 형식 (`fetch-helper.js`의 `cleanResetTime`)
+- **"초기화/Resets" 라벨 제거** — 리셋 시각만 깔끔하게 표시
+- **데이터 없는 섹션 자동 숨김** — `Sonnet 전용`·`추가 사용량`은 `/usage` 출력에 해당 데이터가 있을 때만 표시. 없으면 자동으로 숨겨지고, 한도 구조가 바뀌면 알아서 다시 나타남 (`renderer/app.js`)
+- **폴링 주기 30초** — fetch가 ~22초 걸려서 10초 → 30초로 조정 (`main.js`)
+- **helper 타임아웃 35초** (`usage-fetcher.js`)
+- **`package.json`에 `allowScripts` 추가** — `electron`·`node-pty` 네이티브 빌드 허용 (npm 보안 정책 대응)
+
+### 다시 설치 / 세팅하기 (macOS)
+
+코드만 GitHub에 올라가 있고 `node_modules`(약 313MB)는 포함되지 않으므로, 받은 뒤 `npm install`이 필요합니다.
+
+```bash
+gh repo clone Joo2n/claude-code-usage-overlay
+cd claude-code-usage-overlay
+npm install      # electron + node-pty 네이티브 빌드 (Xcode CLT 필요: xcode-select --install)
+npm start        # 오버레이 실행
+```
+
+> **참고:** 보관은 GitHub로 충분하지만 **실행하려면 로컬에 clone + `npm install`이 필요**합니다(Electron 데스크톱 앱이라 의존성이 있어야 함). 로컬 폴더는 지워도 되고, 쓸 때 위 명령으로 다시 받으면 됩니다.
+
+> **첫 실행 시:** Claude Code CLI가 설치·로그인되어 있어야 하며(`claude --version`), 첫 데이터 fetch는 ~22초 걸립니다.
 
 Stop interrupting your workflow to check `/usage` — this overlay sits on your desktop and shows your session and weekly limits at a glance.
 

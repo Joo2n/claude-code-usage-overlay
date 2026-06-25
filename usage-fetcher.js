@@ -30,7 +30,7 @@ function fetchViaHelper() {
     console.log('[usage-fetcher] Running helper script...');
 
     exec(cmd, {
-      timeout: 30000,
+      timeout: 35000,
       cwd: __dirname,
       env: { ...process.env },
       maxBuffer: 1024 * 1024,

@@ -41,10 +41,10 @@ const MODE_SIZES = {
 
 // Section configuration
 const SECTION_CONFIG = {
-  session: { label: 'Session', fillClass: 'session-fill', dataKey: 'session' },
-  week:    { label: 'Week',    fillClass: 'week-fill',    dataKey: 'week' },
-  sonnet:  { label: 'Sonnet',  fillClass: 'sonnet-fill',  dataKey: 'weekSonnet' },
-  extra:   { label: 'Extra',   fillClass: 'extra-fill',   dataKey: 'extra' },
+  session: { label: '세션',    fillClass: 'session-fill', dataKey: 'session' },
+  week:    { label: '주간',    fillClass: 'week-fill',    dataKey: 'week' },
+  sonnet:  { label: 'Sonnet', fillClass: 'sonnet-fill',  dataKey: 'weekSonnet' },
+  extra:   { label: '추가',   fillClass: 'extra-fill',   dataKey: 'extra' },
 };
 
 const SECTION_ORDER = ['session', 'week', 'sonnet', 'extra'];
@@ -59,14 +59,14 @@ let savedDotPosition = null; // Remembers where the dot was before expanding
 // Theme state
 const savedTheme = localStorage.getItem('cc-overlay-theme') || 'light';
 overlay.className = 'overlay ' + savedTheme + ' mode-' + displayMode;
-toggleLabel.textContent = savedTheme.toUpperCase();
+toggleLabel.textContent = savedTheme === 'light' ? '라이트' : '다크';
 
 themeToggle.addEventListener('click', (e) => {
   e.stopPropagation();
   const isLight = overlay.classList.contains('light');
   const newTheme = isLight ? 'dark' : 'light';
   overlay.className = 'overlay ' + newTheme + ' mode-' + displayMode;
-  toggleLabel.textContent = newTheme.toUpperCase();
+  toggleLabel.textContent = newTheme === 'light' ? '라이트' : '다크';
   localStorage.setItem('cc-overlay-theme', newTheme);
 });
 
@@ -180,7 +180,6 @@ function updateDotDisplay() {
 
 function extractShortTime(resetTime) {
   if (!resetTime) return '';
-  // Match time like "3:00 PM" or "15:00"
   const match = resetTime.match(/\d{1,2}:\d{2}\s*(?:AM|PM)?/i);
   return match ? match[0] : '';
 }
@@ -196,15 +195,15 @@ function getBarClass(percent) {
 function updateSection(barEl, percentEl, resetEl, data, fillClass) {
   if (!data) return;
   const pct = data.percent;
-  percentEl.textContent = pct + '% used';
+  percentEl.textContent = pct + '% \uc0ac\uc6a9';
   barEl.style.width = pct + '%';
   barEl.className = 'bar-fill ' + fillClass + ' ' + getBarClass(pct);
   if (data.resetTime) {
-    resetEl.textContent = 'Resets ' + data.resetTime;
+    resetEl.textContent = data.resetTime;
   }
   if (data.spent !== undefined && data.limit !== undefined) {
     resetEl.textContent = '$' + data.spent.toFixed(2) + '/$' + data.limit.toFixed(2) +
-      (data.resetTime ? ' \u00b7 Resets ' + data.resetTime : '');
+      (data.resetTime ? ' \u00b7 ' + data.resetTime : '');
   }
 }
 
@@ -222,17 +221,16 @@ function updateDisplay(data) {
 
   // Update header reset time from session data
   if (data.session && data.session.resetTime) {
-    const shortTime = extractShortTime(data.session.resetTime);
-    headerReset.textContent = shortTime ? 'Resets ' + shortTime : 'Resets ' + data.session.resetTime;
+    headerReset.textContent = data.session.resetTime;
   } else {
     headerReset.textContent = '';
   }
 
   if (data.fromCache) {
-    setStatus('cached', 'Cached data');
+    setStatus('cached', '캐시 데이터');
   } else {
-    const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    setStatus('live', 'Updated ' + time);
+    const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    setStatus('live', '업데이트 ' + time);
   }
 
   // Keep mini and dot in sync
@@ -256,10 +254,10 @@ window.overlayAPI.onUsageData((data) => {
 
 window.overlayAPI.onUsageStatus((status) => {
   if (status === 'fetching') {
-    setStatus('fetching', 'Fetching (~20s)...');
+    setStatus('fetching', '가져오는 중 (~22초)...');
     refreshBtn.classList.add('spinning');
   } else if (status === 'error') {
-    setStatus('error', 'Failed to fetch');
+    setStatus('error', '가져오기 실패');
     refreshBtn.classList.remove('spinning');
   }
 });

@@ -21,5 +21,9 @@
   "dependencies": {
     "electron": "^33.0.0",
     "node-pty": "^1.1.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true,
+    "node-pty@1.1.0": true
   }
 }
