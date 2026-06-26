@@ -36,6 +36,23 @@ npm start        # 오버레이 실행
 
 > **첫 실행 시:** Claude Code CLI가 설치·로그인되어 있어야 하며(`claude --version`), 첫 데이터 fetch는 ~22초 걸립니다.
 
+### 독(Dock)에 고정하는 앱(.app)으로 만들기 (macOS)
+
+`npm start`나 런타임 아이콘 더블클릭 대신, **독에 고정하고 더블클릭으로 여는 일반 앱**으로 빌드할 수 있습니다.
+
+```bash
+npm run build:mac        # dist-app/Claude Usage-darwin-arm64/Claude Usage.app 생성
+cp -R "dist-app/Claude Usage-darwin-arm64/Claude Usage.app" ~/Applications/
+open ~/Applications/"Claude Usage.app"
+```
+
+- 빌드 후 `~/Applications/Claude Usage.app`을 더블클릭하면 오버레이가 바로 뜹니다.
+- **독 고정:** 실행 중일 때 독 아이콘 우클릭 → 옵션 → "Dock에 유지".
+- 처음 한 번 *"확인되지 않은 개발자"* 경고가 뜨면 우클릭 → 열기로 허용하세요(서명/공증 안 함).
+- **`node_modules/.../Electron.app` 아이콘은 직접 실행하지 마세요** — 그건 빈 런타임이라 Electron welcome 화면만 뜹니다.
+
+> **GUI 앱 동작 메모:** `.app`을 Finder/독에서 실행하면 PATH가 최소화되어 `node`·`claude`를 못 찾을 수 있습니다. 이 포크의 `usage-fetcher.js`는 `node` 절대경로를 탐색하고 PATH를 보강하도록 수정되어 GUI 실행에서도 데이터 fetch가 정상 동작합니다. 또한 `fetch-helper.js`가 별도 `node` 프로세스로 실행되므로 패키징은 반드시 **`--no-asar`**(빌드 스크립트에 포함됨)로 해야 합니다.
+
 Stop interrupting your workflow to check `/usage` — this overlay sits on your desktop and shows your session and weekly limits at a glance.
 
 Works with **Claude Max**, **Claude Pro**, and **Claude Team** subscriptions.

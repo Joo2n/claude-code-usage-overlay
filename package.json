@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build:mac": "npx --yes @electron/packager . \"Claude Usage\" --platform=darwin --arch=arm64 --out=dist-app --overwrite --app-bundle-id=io.payhug.claude-usage --app-version=1.0.0 --no-asar"
   },
   "keywords": [
     "claude",

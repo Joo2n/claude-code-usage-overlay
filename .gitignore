@@ -4,3 +4,4 @@ package-lock.json
 .overlay-position.json
 .tray-icon.png
 *.log
+dist-app/

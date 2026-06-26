@@ -1,9 +1,33 @@
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const CACHE_FILE = path.join(__dirname, '.usage-cache.json');
 const HELPER_SCRIPT = path.join(__dirname, 'fetch-helper.js');
+
+// GUI 앱(.app)으로 더블클릭 실행하면 PATH에 homebrew 경로가 없어
+// `node`를 못 찾을 수 있다. 절대경로 후보를 먼저 탐색한다.
+function findNode() {
+  const candidates = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    path.join(os.homedir(), '.local', 'bin', 'node'),
+  ];
+  for (const p of candidates) {
+    try { fs.accessSync(p); return p; } catch {}
+  }
+  try { return execSync('command -v node', { encoding: 'utf-8' }).trim(); } catch {}
+  return 'node';
+}
+const NODE_BIN = findNode();
+// helper(및 그 안의 claude)가 도구를 찾을 수 있도록 PATH를 보강한다.
+const AUGMENTED_PATH = [
+  '/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin',
+  path.join(os.homedir(), '.local', 'bin'),
+  process.env.PATH || '',
+].join(':');
 
 // Save fetched data to cache
 function saveCache(data) {
@@ -26,13 +50,13 @@ function loadCache() {
 // (uses system Node.js, not Electron, so node-pty works without rebuild)
 function fetchViaHelper() {
   return new Promise((resolve, reject) => {
-    const cmd = `node "${HELPER_SCRIPT}"`;
-    console.log('[usage-fetcher] Running helper script...');
+    const cmd = `"${NODE_BIN}" "${HELPER_SCRIPT}"`;
+    console.log('[usage-fetcher] Running helper script... node=' + NODE_BIN);
 
     exec(cmd, {
       timeout: 35000,
       cwd: __dirname,
-      env: { ...process.env },
+      env: { ...process.env, PATH: AUGMENTED_PATH },
       maxBuffer: 1024 * 1024,
     }, (error, stdout, stderr) => {
       if (stderr) console.log('[usage-fetcher] Helper stderr:', stderr);
